@@ -1,8 +1,19 @@
 """SQLite bootstrap for InstaKill. Uses the stdlib sqlite3 module (see R11)."""
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "instakill.db"
+_DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent.parent / "instakill.db"
+
+
+def get_db_path() -> Path:
+    override = os.environ.get("INSTAKILL_DB_PATH")
+    if override:
+        return Path(override)
+    return _DEFAULT_DB_PATH
+
+
+DB_PATH = _DEFAULT_DB_PATH
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS user (
@@ -21,7 +32,7 @@ CREATE TABLE IF NOT EXISTS post (
 
 
 def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -33,4 +44,4 @@ def init_db() -> None:
 
 if __name__ == "__main__":
     init_db()
-    print(f"Initialized database at {DB_PATH}")
+    print(f"Initialized database at {get_db_path()}")
