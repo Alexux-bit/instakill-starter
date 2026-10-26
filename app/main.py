@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from app.adapters.encoder import MiniLMEncoder, TextEncoder
+from app.api.feed import router as feed_router
 from app.api.search import router as search_router
 from app.db.database import init_db
 from app.repositories.posts import list_posts
@@ -21,6 +22,7 @@ def create_app(*, encoder: TextEncoder | None = None) -> FastAPI:
 
     application = FastAPI(title="InstaKill", lifespan=lifespan)
     application.include_router(search_router)
+    application.include_router(feed_router)
 
     @application.get("/")
     def root() -> RedirectResponse:
