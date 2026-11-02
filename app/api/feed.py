@@ -1,10 +1,11 @@
 """HTTP edge for the home feed: query parsing and response serialization."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.services.feed import (
     STRATEGIES,
     FeedResponse,
+    LearnedModelUnavailable,
     UserNotFoundError,
     build_feed,
 )
@@ -19,6 +20,7 @@ DEFAULT_STRATEGY = "for_you"
 
 @router.get("/feed", response_model=FeedResponse, response_model_exclude_none=True)
 def feed(
+    request: Request,
     user_id: int | None = Query(default=None),
     limit: int = Query(default=DEFAULT_LIMIT),
     strategy: str = Query(default=DEFAULT_STRATEGY),
@@ -36,9 +38,22 @@ def feed(
     if strategy not in STRATEGIES:
         raise HTTPException(
             status_code=400,
-            detail="Query parameter 'strategy' must be 'for_you' or 'chronological'.",
+            detail=(
+                "Query parameter 'strategy' must be 'for_you', "
+                "'chronological', or 'learned'."
+            ),
         )
     try:
-        return build_feed(user_id, limit, strategy)
+        return build_feed(
+            user_id,
+            limit,
+            strategy,
+            learned_model=request.app.state.learned_model,
+        )
     except UserNotFoundError:
         raise HTTPException(status_code=404, detail="User not found.") from None
+    except LearnedModelUnavailable:
+        raise HTTPException(
+            status_code=503,
+            detail="The learned feed model is unavailable.",
+        ) from None

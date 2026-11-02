@@ -1,4 +1,6 @@
 instakill.db
+ml-latest-small/
+ml-latest-small*.zip
 __pycache__/
 *.pyc
 .pytest_cache/
