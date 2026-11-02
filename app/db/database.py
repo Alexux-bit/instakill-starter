@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS post (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES user(id),
     content TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    genres TEXT NOT NULL DEFAULT '[]',
+    source_key TEXT
 );
 
 CREATE TABLE IF NOT EXISTS follow (
@@ -49,12 +51,26 @@ CREATE TABLE IF NOT EXISTS "like" (
 def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
 def init_db() -> None:
     with get_connection() as conn:
         conn.executescript(SCHEMA)
+        post_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(post)").fetchall()
+        }
+        if "genres" not in post_columns:
+            conn.execute(
+                "ALTER TABLE post ADD COLUMN genres TEXT NOT NULL DEFAULT '[]'"
+            )
+        if "source_key" not in post_columns:
+            conn.execute("ALTER TABLE post ADD COLUMN source_key TEXT")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_post_source_key "
+            "ON post(source_key)"
+        )
 
 
 if __name__ == "__main__":

@@ -2,21 +2,23 @@
 
 Mini social-media platform. Mandatory backend: Python + FastAPI + SQLite (default) / PostgreSQL (allowed). See the full brief and grading rubric in `masterplan.md` (course root).
 
-What the instructor provides (this starter):
+The app provides:
 
-- `app/main.py` — FastAPI app with `GET /health`, `GET /search`, and `GET /feed`
-- `app/db/database.py` — SQLite bootstrap (creates tables on startup)
-- `app/domain/models.py` — `User` / `Post` schema
-- `scripts/seed_db.py` — 5-10 synthetic users/posts
-- `tests/test_health.py` — test skeleton
+- `app/main.py` — FastAPI app with health, search, feed, CRUD, follow, and like routes
+- `app/db/database.py` — SQLite bootstrap and forward-compatible schema migration
+- `app/domain/models.py` — `User` / `Post` domain models
+- `scripts/seed_db.py` — small synthetic fixture data
+- `scripts/seed_movielens.py` — bounded import from a locally supplied MovieLens zip
 
-Semantic search and a v0 feed are implemented. User/post CRUD and extra ML work are still later.
+Semantic search, three feed strategies, and user/post/social CRUD are implemented.
 
 ## Running it
 
 ```bash
 pip install -e .
 python scripts/seed_db.py
+# Optional: import MovieLens latest-small (the zip is local input, not repository data)
+python scripts/seed_movielens.py <path-to-ml-latest-small.zip>
 uvicorn app.main:app --reload
 # other terminal:
 curl localhost:8000/health
@@ -27,6 +29,9 @@ pytest
 ```
 
 The first process start downloads `all-MiniLM-L6-v2` (sentence-transformers) if it is not already cached.
+The trained learned-feed model is stored at `app/models/like_model.npz`. If it is absent,
+the app still starts, but `GET /feed?strategy=learned` responds with `503`.
+MovieLens zip files and extracted data are ignored by Git.
 
 ## Semantic search index
 
@@ -39,17 +44,28 @@ On application startup, `create_app` in `app/main.py` runs FastAPI lifespan:
 
 `GET /search` does not scan SQLite per request. It encodes the query, then `retrieve_top_k` in `app/retrieval.py` scores the in-memory matrix with NumPy cosine similarity and a deterministic top-*k* (score descending, `post_id` ascending).
 
-When a future create-post path persists a new row, refresh the index by calling `SearchIndex.add_post` with that `Post` and the same encoder (encode the new content and append one row). A full rebuild via `SearchIndex.build(list_posts(), encoder)` is the fallback if the in-memory copy drifts.
+Post create, edit, and delete routes keep this index synchronized with the database.
 
 ## Feed ranking
 
-`GET /feed` does not use the search encoder. The service loads posts, follows, and likes from repositories, drops the viewer's own posts and already-liked posts, then either sorts by `created_at` (`strategy=chronological`) or calls `rank_feed` (`strategy=for_you`).
+`GET /feed` does not use the search encoder. The service loads posts, follows, and likes from repositories, drops the viewer's own posts and already-liked posts, then sorts by `created_at` (`strategy=chronological`), calls `rank_feed` (`strategy=for_you`), or applies the saved NumPy MLP (`strategy=learned`).
 
-Formula and default weights are in `docs/api-contract.md`. `rank_feed` is a pure function: it receives `now`, performs no I/O, and does not mutate its inputs. Top-*k* uses a bounded heap.
+The learned scorer consumes the notebook's six signals in the saved feature order: freshness, genre affinity, recent popularity, user activity, lifetime popularity, and age. Weights, scaler arrays, and the signal constants are read from `like_model.npz` once at startup. All candidate scores are predicted in one NumPy matrix operation. The formula and default weights for `for_you` are in `docs/api-contract.md`; `rank_feed` is a pure function that receives `now`, performs no I/O, and does not mutate its inputs.
 
 **Complexity.** Let `C` be the number of candidate posts after filtering and `k` the `limit`. Scoring is `O(C)`. The heap keeps at most `k` items, so selection is `O(C log k)`, then the heap is sorted in `O(k log k)`. One request is **O(C log k)** time (plus the SQL reads that produce the candidate set).
 
-The first thing to precompute is **per-post popularity** (and freshness at a shared `now`): both are the same for every viewer. Affinity is per-user and should stay on the request path until there is a larger graph.
+The first thing to precompute is **per-post popularity** (and freshness at a shared `now`): both are the same for every viewer. The learned affinity and activity features are per-user and are built for the request's candidate matrix.
+
+## MovieLens import
+
+Pass the locally downloaded `ml-latest-small.zip` to `scripts/seed_movielens.py`.
+The importer reads the CSVs directly from the archive without extracting them. It
+imports at most 200 users and 2,000 movies, uses each movie's first rating time as
+the post time, and turns ratings of at least 4 into likes using each rating's
+timestamp. Since movies do not have authors in MovieLens, posts are assigned to
+the imported users in a deterministic round-robin order. Stable source IDs make
+repeated imports idempotent; unrelated database records are preserved. Do not
+commit the zip or extracted MovieLens data.
 
 ## Milestones (see masterplan.md for full details)
 

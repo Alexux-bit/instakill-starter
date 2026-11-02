@@ -28,6 +28,7 @@ class FeedCandidate:
     author_id: int
     content: str
     created_at: datetime
+    genres: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

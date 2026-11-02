@@ -59,6 +59,27 @@ class SearchIndex:
             self.post_ids = np.append(self.post_ids, post.id)
         self.posts.append(post)
 
+    def update_post(self, post: Post, encoder: TextEncoder) -> None:
+        if post.id is None:
+            raise ValueError("Indexed posts must have an id")
+        matches = np.flatnonzero(self.post_ids == post.id)
+        if matches.size == 0:
+            self.add_post(post, encoder)
+            return
+        index = int(matches[0])
+        self.embeddings[index] = encoder.encode([post.content])[0]
+        self.posts[index] = post
+
+    def remove_posts(self, post_ids: set[int]) -> None:
+        if not post_ids:
+            return
+        keep = ~np.isin(self.post_ids, np.fromiter(post_ids, dtype=np.int64))
+        self.post_ids = self.post_ids[keep]
+        self.embeddings = self.embeddings[keep]
+        self.posts = [
+            post for post in self.posts if post.id is None or post.id not in post_ids
+        ]
+
 
 def search_posts(
     query: str,
