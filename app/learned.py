@@ -45,7 +45,9 @@ def load_model(path: Path = MODEL_PATH) -> dict[str, np.ndarray]:
         model = {name: archive[name].copy() for name in required}
 
     if tuple(str(name) for name in model["features"].tolist()) != FEATURES:
-        raise ValueError("Learned model feature order does not match the feed contract.")
+        raise ValueError(
+            "Learned model feature order does not match the feed contract."
+        )
     if model["W1"].shape != (6, 15) or model["b1"].shape != (15,):
         raise ValueError("Learned model hidden-layer arrays have invalid shapes.")
     if model["W2"].shape != (15, 1) or model["b2"].shape != (1,):

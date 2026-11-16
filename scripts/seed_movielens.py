@@ -14,8 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.db.database import get_connection, init_db
 
-MAX_USERS = 200
-MAX_POSTS = 2_000
+MAX_USERS = 2_000
+MAX_POSTS = 20_000
 USER_PREFIX = "movielens-user-"
 POST_PREFIX = "movielens:"
 
@@ -66,9 +66,7 @@ def seed(archive_path: Path) -> tuple[int, int, int]:
             movie_id = int(row["movieId"])
             timestamp = int(row["timestamp"])
             user_ids.add(user_id)
-            first_seen[movie_id] = min(
-                timestamp, first_seen.get(movie_id, timestamp)
-            )
+            first_seen[movie_id] = min(timestamp, first_seen.get(movie_id, timestamp))
 
         selected_users = sorted(user_ids)[:MAX_USERS]
         selected_movies = sorted(
@@ -111,7 +109,9 @@ def seed(archive_path: Path) -> tuple[int, int, int]:
 
         movie_posts: dict[int, int] = {}
         for movie_position, movie_id in enumerate(selected_movies):
-            author_id = db_user_ids[selected_users[movie_position % len(selected_users)]]
+            author_id = db_user_ids[
+                selected_users[movie_position % len(selected_users)]
+            ]
             title, genres = movies.get(movie_id, (f"Movie {movie_id}", []))
             created_at = _as_timestamp(first_seen[movie_id])
             source_key = f"{POST_PREFIX}{movie_id}"
